@@ -1,13 +1,13 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://45o2bjcys8y2"]
 
-[ext_resource type="Script" path="res://scripts/simple_game.gd" id="game"]
+[ext_resource type="Script" uid="uid://b5lglqs3uk2f6" path="res://scripts/simple_game.gd" id="game"]
 
-[node name="SimpleGame" type="Node2D"]
+[node name="SimpleGame" type="Node2D" unique_id=556020506]
 script = ExtResource("game")
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=1508643626]
 
-[node name="Label" type="Label" parent="UI"]
+[node name="Label" type="Label" parent="UI" unique_id=970647878]
 offset_right = 900.0
 offset_bottom = 100.0
 text = "Gold: 500 | Lives: 20 | Wave: 1"

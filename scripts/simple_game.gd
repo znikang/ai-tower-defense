@@ -18,6 +18,9 @@ var enemies_spawned = 0
 var castle_pos = Vector2(450, 300)
 var castle_size = 80
 var castle_sprite: Sprite2D
+var castle_shake_timer = 0.0
+var castle_shake_intensity = 0.0
+var castle_blink_timer = 0.0
 
 var wall_texture = preload("res://assets/images/wall.png")
 var castle_texture = preload("res://assets/images/castle.png")
@@ -49,6 +52,25 @@ func _ready():
 	queue_redraw()
 	await get_tree().create_timer(2.0).timeout
 	start_wave()
+
+func play_sound(sound_type: String):
+	var audio_player = AudioStreamPlayer.new()
+	add_child(audio_player)
+	
+	var sound = null
+	match sound_type:
+		"castle_hit":
+			sound = load("res://assets/sounds/castle_hit.wav")
+		"shoot":
+			sound = load("res://assets/sounds/shoot.wav")
+		"explosion":
+			sound = load("res://assets/sounds/explosion.wav")
+	
+	if sound:
+		audio_player.stream = sound
+		audio_player.play()
+		await get_tree().create_timer(1.0).timeout
+		audio_player.queue_free()
 
 func create_ui():
 	var ui_layer = CanvasLayer.new()
@@ -341,12 +363,33 @@ func get_turn_directions(direction: Vector2) -> Array:
 		result.append(rotate_direction(direction, angle))
 	return result
 
+func trigger_castle_damage():
+	play_sound.call_deferred("castle_hit")
+	castle_shake_timer = 0.3
+	castle_shake_intensity = 8.0
+	castle_blink_timer = 0.3
+
 func _process(delta):
 	if game_over:
 		return
 	
 	var screen_width = get_viewport_rect().size.x
 	var screen_height = get_viewport_rect().size.y
+	
+	castle_shake_timer -= delta
+	castle_blink_timer -= delta
+	
+	if castle_blink_timer > 0:
+		var blink_phase = int(castle_blink_timer * 10) % 2
+		castle_sprite.modulate = Color.WHITE if blink_phase == 0 else Color(1.2, 0.8, 0.8)
+	else:
+		castle_sprite.modulate = Color.WHITE
+	
+	var shake_offset = Vector2.ZERO
+	if castle_shake_timer > 0:
+		shake_offset = Vector2(randf_range(-castle_shake_intensity, castle_shake_intensity), 
+							   randf_range(-castle_shake_intensity, castle_shake_intensity))
+	castle_sprite.position = castle_pos + shake_offset
 	
 	for i in range(enemies.size() - 1, -1, -1):
 		var enemy = enemies[i]
@@ -413,6 +456,7 @@ func _process(delta):
 		
 		if enemy_pos.distance_to(castle_pos) < 60:
 			lives -= 1
+			trigger_castle_damage()
 			enemy["obj"].queue_free()
 			enemies.remove_at(i)
 			if lives <= 0:
@@ -431,6 +475,7 @@ func _process(delta):
 				target = enemy
 		
 		if tower["shoot_timer"] <= 0 and target:
+			play_sound.call_deferred("shoot")
 			var bullet_obj = ColorRect.new()
 			bullet_obj.size = Vector2(8, 8)
 			bullet_obj.color = Color.YELLOW
@@ -490,6 +535,7 @@ func _process(delta):
 	queue_redraw()
 
 func create_explosion(pos: Vector2, explosion_range: float, damage: int):
+	play_sound.call_deferred("explosion")
 	var explosion = {
 		"pos": pos,
 		"range": explosion_range,
@@ -552,6 +598,8 @@ func reset_game():
 	wave_in_progress = false
 	total_enemies_in_wave = 0
 	enemies_spawned = 0
+	castle_shake_timer = 0.0
+	castle_blink_timer = 0.0
 	
 	for child in get_children():
 		if child.name != "UI" and not child is CanvasLayer:
