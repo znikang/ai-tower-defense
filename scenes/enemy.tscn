@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://dhr16qa1bhhs2"]
+
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="1_dn0n5"]
+
+[node name="Enemy" type="Node2D"]
+script = ExtResource("1_dn0n5")
+
+[node name="Sprite2D" type="ColorRect" parent="."]
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+color = Color(0.682353, 0.780392, 1, 1)
