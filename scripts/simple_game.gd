@@ -517,11 +517,11 @@ func _draw():
 	
 	for enemy in enemies:
 		var enemy_pos = Vector2(enemy["x"], enemy["y"])
-		draw_rect(Rect2(enemy_pos.x - 12, enemy_pos.y - 18, 24, 4), Color.BLACK)
+		draw_rect(Rect2(enemy_pos.x - 16, enemy_pos.y - 30, 24, 4), Color.BLACK)
 		var hp_ratio = float(enemy["hp"]) / float(enemy["max_hp"])
 		var bar_color = Color.GREEN.lerp(Color.RED, 1.0 - hp_ratio)
-		draw_rect(Rect2(enemy_pos.x - 12, enemy_pos.y - 18, 24 * hp_ratio, 4), bar_color)
-		draw_rect(Rect2(enemy_pos.x - 12, enemy_pos.y - 18, 24, 4), Color.WHITE, false, 1.0)
+		draw_rect(Rect2(enemy_pos.x - 16, enemy_pos.y - 30, 24 * hp_ratio, 4), bar_color)
+		draw_rect(Rect2(enemy_pos.x - 16, enemy_pos.y - 30, 24, 4), Color.WHITE, false, 1.0)
 	
 	for wall in walls:
 		var hp_bar_y = wall["pos"].y + 20
