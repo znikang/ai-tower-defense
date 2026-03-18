@@ -577,8 +577,26 @@ func _draw():
 		draw_rect(Rect2(wall["pos"].x - 12, hp_bar_y, 24 * hp_ratio, 2), bar_color)
 	
 	for explosion in explosions:
-		draw_circle(explosion["pos"], explosion["range"], Color(1, 0, 0, 0.3))
-		draw_arc(explosion["pos"], explosion["range"], 0, TAU, 32, Color(1, 0, 0, 0.6), 2.0)
+		var exp_pos = explosion["pos"]
+		var progress = 1.0 - (explosion["lifetime"] / 0.3)
+		
+		var outer_range = explosion["range"] * (1.0 + progress * 0.5)
+		draw_circle(exp_pos, outer_range, Color(1, 1, 0, 0.4 * (1.0 - progress)))
+		
+		var middle_range = explosion["range"] * 0.8
+		draw_circle(exp_pos, middle_range, Color(1, 0.6, 0, 0.6 * (1.0 - progress)))
+		
+		var inner_range = explosion["range"] * 0.4
+		draw_circle(exp_pos, inner_range, Color(1, 0.2, 0, 1.0 * (1.0 - progress)))
+		
+		draw_arc(exp_pos, explosion["range"], 0, TAU, 32, Color(1, 0.5, 0, 0.8 * (1.0 - progress)), 2.0)
+		
+		var particle_count = 8
+		for p in range(particle_count):
+			var angle = (TAU / particle_count) * p + progress * TAU
+			var particle_dist = explosion["range"] + progress * 50
+			var particle_pos = exp_pos + Vector2(cos(angle), sin(angle)) * particle_dist
+			draw_circle(particle_pos, 2, Color(1, 1 - progress * 0.5, 0, 1.0 - progress))
 
 func reset_game():
 	gold = 500
