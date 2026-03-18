@@ -17,8 +17,10 @@ var enemies_spawned = 0
 
 var castle_pos = Vector2(450, 300)
 var castle_size = 80
+var castle_sprite: Sprite2D
 
 var wall_texture = preload("res://assets/images/wall.png")
+var castle_texture = preload("res://assets/images/castle.png")
 
 var tower_types = {
 	1: {"name": "Basic", "range": 120, "damage": 10, "shoot_speed": 1.0, "cost": 100, "color": Color.GREEN, "explosion_range": 30},
@@ -36,18 +38,23 @@ var ui_buttons = []
 
 func _ready():
 	print("Defense Mode Started!")
+	
+	castle_sprite = Sprite2D.new()
+	castle_sprite.texture = castle_texture
+	castle_sprite.position = castle_pos
+	castle_sprite.scale = Vector2(1.5, 1.5)
+	add_child(castle_sprite)
+	
 	create_ui()
 	queue_redraw()
 	await get_tree().create_timer(2.0).timeout
 	start_wave()
 
 func create_ui():
-	# 建立 UI CanvasLayer (下方)
 	var ui_layer = CanvasLayer.new()
 	ui_layer.layer = 10
 	add_child(ui_layer)
 	
-	# 建立水平佈局容器 (下方)
 	var hbox = HBoxContainer.new()
 	hbox.anchor_left = 0.0
 	hbox.anchor_top = 0.8
@@ -58,7 +65,6 @@ func create_ui():
 	hbox.add_theme_constant_override("separation", 5)
 	ui_layer.add_child(hbox)
 	
-	# 基礎塔按鈕
 	var btn1 = Button.new()
 	btn1.text = "GREEN\nBASIC\n100G"
 	btn1.toggle_mode = true
@@ -68,7 +74,6 @@ func create_ui():
 	hbox.add_child(btn1)
 	ui_buttons.append(btn1)
 	
-	# 牆按鈕
 	var btn2 = Button.new()
 	btn2.text = "WALL\nWALL\n1 PC"
 	btn2.toggle_mode = true
@@ -77,7 +82,6 @@ func create_ui():
 	hbox.add_child(btn2)
 	ui_buttons.append(btn2)
 	
-	# 狙擊塔按鈕
 	var btn3 = Button.new()
 	btn3.text = "BLUE\nSNIPER\n200G"
 	btn3.toggle_mode = true
@@ -86,7 +90,6 @@ func create_ui():
 	hbox.add_child(btn3)
 	ui_buttons.append(btn3)
 	
-	# 重置按鈕
 	var reset_btn = Button.new()
 	reset_btn.text = "RESET"
 	reset_btn.custom_minimum_size = Vector2(0, 80)
@@ -252,9 +255,28 @@ func generate_wave_enemies() -> Array:
 
 func spawn_enemy(enemy_type: int):
 	var enemy_info = enemy_types[enemy_type]
-	var enemy_obj = ColorRect.new()
-	enemy_obj.size = Vector2(16, 16)
-	enemy_obj.color = enemy_info["color"]
+	
+	var enemy_obj = Sprite2D.new()
+	var cockroach_texture = load("res://assets/images/cockroach.png")
+	if cockroach_texture:
+		enemy_obj.texture = cockroach_texture
+	else:
+		var rect = ColorRect.new()
+		rect.size = Vector2(16, 16)
+		rect.color = enemy_info["color"]
+		enemy_obj = rect
+	
+	enemy_obj.scale = Vector2(1.5, 1.5)
+	
+	if enemy_obj is Sprite2D:
+		match enemy_type:
+			1:
+				enemy_obj.self_modulate = Color.YELLOW
+			2:
+				enemy_obj.self_modulate = Color.WHITE
+			3:
+				enemy_obj.self_modulate = Color.RED
+	
 	add_child(enemy_obj)
 	
 	var spawn_pos = get_random_edge_position()
@@ -489,9 +511,6 @@ func create_explosion(pos: Vector2, explosion_range: float, damage: int):
 				enemies.remove_at(i)
 
 func _draw():
-	draw_circle(castle_pos, castle_size, Color.DARK_GOLDENROD)
-	draw_circle(castle_pos, castle_size, Color.YELLOW, false, 3.0)
-	
 	for tower in towers:
 		draw_circle(tower["pos"], tower["range"], Color(1, 1, 1, 0.1))
 		draw_arc(tower["pos"], tower["range"], 0, TAU, 32, Color(1, 1, 1, 0.3), 1.0)
@@ -537,6 +556,12 @@ func reset_game():
 	for child in get_children():
 		if child.name != "UI" and not child is CanvasLayer:
 			child.queue_free()
+	
+	castle_sprite = Sprite2D.new()
+	castle_sprite.texture = castle_texture
+	castle_sprite.position = castle_pos
+	castle_sprite.scale = Vector2(1.5, 1.5)
+	add_child(castle_sprite)
 	
 	queue_redraw()
 	
