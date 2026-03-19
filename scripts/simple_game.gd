@@ -26,9 +26,11 @@ var wall_texture = preload("res://assets/images/wall.png")
 var castle_texture = preload("res://assets/images/castle.png")
 
 var tower_types = {
-	1: {"name": "Basic", "range": 120, "damage": 10, "shoot_speed": 1.0, "cost": 100, "color": Color.GREEN, "explosion_range": 30},
-	2: {"name": "Sniper", "range": 180, "damage": 30, "shoot_speed": 2.0, "cost": 200, "color": Color.DARK_BLUE, "explosion_range": 50},
-	3: {"name": "Gun", "range": 80, "damage": 5, "shoot_speed": 0.3, "cost": 150, "color": Color.RED, "explosion_range": 20}
+	1: {"name": "Basic", "range": 120, "damage": 10, "shoot_speed": 1.0, "cost": 100, "color": Color.GREEN, "explosion_range": 30, "type": "normal"},
+	2: {"name": "Sniper", "range": 180, "damage": 30, "shoot_speed": 2.0, "cost": 200, "color": Color.DARK_BLUE, "explosion_range": 50, "type": "normal"},
+	3: {"name": "Gun", "range": 80, "damage": 5, "shoot_speed": 0.3, "cost": 150, "color": Color.RED, "explosion_range": 20, "type": "normal"},
+	4: {"name": "Freeze", "range": 150, "damage": 0, "shoot_speed": 1.5, "cost": 180, "color": Color.CYAN, "freeze_time": 2.0, "type": "freeze"},
+	5: {"name": "Laser", "range": 160, "damage": 20, "shoot_speed": 0.0, "cost": 220, "color": Color.LIGHT_GRAY, "type": "laser"}
 }
 
 var enemy_types = {
@@ -38,6 +40,9 @@ var enemy_types = {
 }
 
 var ui_buttons = []
+var frozen_enemies = {}
+var laser_targets = {}
+var next_enemy_id = 0
 
 func _ready():
 	print("Defense Mode Started!")
@@ -77,46 +82,77 @@ func create_ui():
 	ui_layer.layer = 10
 	add_child(ui_layer)
 	
-	var hbox = HBoxContainer.new()
-	hbox.anchor_left = 0.0
-	hbox.anchor_top = 0.8
-	hbox.anchor_right = 1.0
-	hbox.anchor_bottom = 1.0
-	hbox.offset_top = 0
-	hbox.offset_left = 0
-	hbox.add_theme_constant_override("separation", 5)
-	ui_layer.add_child(hbox)
+	var vbox = VBoxContainer.new()
+	vbox.anchor_left = 0.0
+	vbox.anchor_top = 0.75
+	vbox.anchor_right = 1.0
+	vbox.anchor_bottom = 1.0
+	vbox.add_theme_constant_override("separation", 3)
+	ui_layer.add_child(vbox)
+	
+	# 第一排塔
+	var hbox1 = HBoxContainer.new()
+	hbox1.add_theme_constant_override("separation", 8)
+	vbox.add_child(hbox1)
 	
 	var btn1 = Button.new()
 	btn1.text = "GREEN\nBASIC\n100G"
 	btn1.toggle_mode = true
 	btn1.button_pressed = true
-	btn1.custom_minimum_size = Vector2(0, 80)
+	btn1.custom_minimum_size = Vector2(0, 60)
 	btn1.pressed.connect(func(): _on_weapon_selected(1))
-	hbox.add_child(btn1)
+	hbox1.add_child(btn1)
 	ui_buttons.append(btn1)
-	
-	var btn2 = Button.new()
-	btn2.text = "WALL\nWALL\n1 PC"
-	btn2.toggle_mode = true
-	btn2.custom_minimum_size = Vector2(0, 80)
-	btn2.pressed.connect(func(): _on_weapon_selected(2))
-	hbox.add_child(btn2)
-	ui_buttons.append(btn2)
 	
 	var btn3 = Button.new()
 	btn3.text = "BLUE\nSNIPER\n200G"
 	btn3.toggle_mode = true
-	btn3.custom_minimum_size = Vector2(0, 80)
+	btn3.custom_minimum_size = Vector2(0, 60)
 	btn3.pressed.connect(func(): _on_weapon_selected(3))
-	hbox.add_child(btn3)
+	hbox1.add_child(btn3)
 	ui_buttons.append(btn3)
+	
+	var btn_gun = Button.new()
+	btn_gun.text = "RED\nGUN\n150G"
+	btn_gun.toggle_mode = true
+	btn_gun.custom_minimum_size = Vector2(0, 60)
+	btn_gun.pressed.connect(func(): _on_weapon_selected(3))
+	hbox1.add_child(btn_gun)
+	
+	var btn_freeze = Button.new()
+	btn_freeze.text = "CYAN\nFREEZE\n180G"
+	btn_freeze.toggle_mode = true
+	btn_freeze.custom_minimum_size = Vector2(0, 60)
+	btn_freeze.pressed.connect(func(): _on_weapon_selected(4))
+	hbox1.add_child(btn_freeze)
+	ui_buttons.append(btn_freeze)
+	
+	var btn_laser = Button.new()
+	btn_laser.text = "LASER\nLASER\n220G"
+	btn_laser.toggle_mode = true
+	btn_laser.custom_minimum_size = Vector2(0, 60)
+	btn_laser.pressed.connect(func(): _on_weapon_selected(5))
+	hbox1.add_child(btn_laser)
+	ui_buttons.append(btn_laser)
+	
+	# 第二排 - 牆和重置
+	var hbox2 = HBoxContainer.new()
+	hbox2.add_theme_constant_override("separation", 5)
+	vbox.add_child(hbox2)
+	
+	var btn2 = Button.new()
+	btn2.text = "WALL\nWALL\n1 PC"
+	btn2.toggle_mode = true
+	btn2.custom_minimum_size = Vector2(0, 60)
+	btn2.pressed.connect(func(): _on_weapon_selected(2))
+	hbox2.add_child(btn2)
+	ui_buttons.append(btn2)
 	
 	var reset_btn = Button.new()
 	reset_btn.text = "RESET"
-	reset_btn.custom_minimum_size = Vector2(0, 80)
+	reset_btn.custom_minimum_size = Vector2(0, 60)
 	reset_btn.pressed.connect(func(): reset_game())
-	hbox.add_child(reset_btn)
+	hbox2.add_child(reset_btn)
 
 func _on_weapon_selected(mode: int):
 	selected_mode = mode
@@ -148,7 +184,9 @@ func _input(event):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var mouse_y = get_global_mouse_position().y
 		var screen_height = get_viewport_rect().size.y
-		if mouse_y > screen_height * 0.8:
+		
+		# 按鈕區域 (0.75 - 1.0) - 直接返回，不放置塔
+		if mouse_y > screen_height * 0.75:
 			return
 		
 		var pos = get_global_mouse_position()
@@ -165,10 +203,22 @@ func _input(event):
 				place_wall(pos)
 				queue_redraw()
 		elif selected_mode == 3:
-			var tower_info = tower_types[2]
+			var tower_info = tower_types[3]
 			if not game_over and gold >= tower_info["cost"]:
 				gold -= tower_info["cost"]
-				place_tower(pos, 2)
+				place_tower(pos, 3)
+				queue_redraw()
+		elif selected_mode == 4:
+			var tower_info = tower_types[4]
+			if not game_over and gold >= tower_info["cost"]:
+				gold -= tower_info["cost"]
+				place_tower(pos, 4)
+				queue_redraw()
+		elif selected_mode == 5:
+			var tower_info = tower_types[5]
+			if not game_over and gold >= tower_info["cost"]:
+				gold -= tower_info["cost"]
+				place_tower(pos, 5)
 				queue_redraw()
 
 func place_tower(pos, tower_type):
@@ -185,7 +235,7 @@ func place_tower(pos, tower_type):
 		"range": tower_info["range"],
 		"damage": tower_info["damage"],
 		"shoot_speed": tower_info["shoot_speed"],
-		"explosion_range": tower_info["explosion_range"],
+		"explosion_range": tower_info.get("explosion_range", 0),
 		"obj": tower_obj,
 		"shoot_timer": 0.0,
 		"target": null
@@ -340,7 +390,7 @@ func get_random_edge_position() -> Vector2:
 	
 	return pos
 
-func check_wall_collision(enemy_pos: Vector2, direction: Vector2) -> int:
+func check_wall_collision(enemy_pos: Vector2, _direction: Vector2) -> int:
 	var enemy_rect = Rect2(enemy_pos - Vector2(10, 10), Vector2(20, 20))
 	
 	for w_idx in range(walls.size()):
@@ -474,7 +524,9 @@ func _process(delta):
 				closest_dist = dist
 				target = enemy
 		
-		if tower["shoot_timer"] <= 0 and target:
+		var tower_type = tower_types[tower["type"]]["type"]
+		
+		if tower_type == "normal" and tower["shoot_timer"] <= 0 and target:
 			play_sound.call_deferred("shoot")
 			var bullet_obj = ColorRect.new()
 			bullet_obj.size = Vector2(8, 8)
