@@ -524,9 +524,7 @@ func _process(delta):
 				closest_dist = dist
 				target = enemy
 		
-		var tower_type = tower_types[tower["type"]]["type"]
-		
-		if tower_type == "normal" and tower["shoot_timer"] <= 0 and target:
+		if tower["shoot_timer"] <= 0 and target:
 			play_sound.call_deferred("shoot")
 			var bullet_obj = ColorRect.new()
 			bullet_obj.size = Vector2(8, 8)
