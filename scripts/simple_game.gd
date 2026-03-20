@@ -42,31 +42,53 @@ var enemy_types = {
 var ui_buttons = []
 var dynamic_nodes = []
 
+# 音效快取
+var sfx_laser: AudioStreamWAV
+var sfx_shoot: AudioStreamWAV
+var sfx_explosion: AudioStreamWAV
+var sfx_freeze: AudioStreamWAV
+var sfx_castle_hit: AudioStreamWAV
+
+# 雷射持續音效播放器
+var laser_audio: AudioStreamPlayer
+var laser_sound_timer = 0.0
+var LASER_SOUND_INTERVAL = 0.12  # 雷射音效間隔
+
 func _ready():
+	_preload_sounds()
+
 	castle_sprite = Sprite2D.new()
 	castle_sprite.texture = castle_texture
 	castle_sprite.position = castle_pos
 	castle_sprite.scale = Vector2(1.5, 1.5)
 	add_child(castle_sprite)
 	dynamic_nodes.append(castle_sprite)
+
+	# 雷射專用音效播放器
+	laser_audio = AudioStreamPlayer.new()
+	laser_audio.volume_db = -6.0
+	add_child(laser_audio)
+
 	create_ui()
 	queue_redraw()
 	await get_tree().create_timer(2.0).timeout
 	start_wave()
 
-func play_sound(sound_type: String):
-	var audio_player = AudioStreamPlayer.new()
-	add_child(audio_player)
-	var sound = null
-	match sound_type:
-		"castle_hit": sound = load("res://assets/sounds/castle_hit.wav")
-		"shoot":      sound = load("res://assets/sounds/shoot.wav")
-		"explosion":  sound = load("res://assets/sounds/explosion.wav")
-	if sound:
-		audio_player.stream = sound
-		audio_player.play()
-		await get_tree().create_timer(1.0).timeout
-		audio_player.queue_free()
+func _preload_sounds():
+	var SoundGen = preload("res://scripts/sound_generator.gd")
+	sfx_laser     = SoundGen.generate_laser()
+	sfx_shoot     = SoundGen.generate_shoot()
+	sfx_explosion = SoundGen.generate_explosion()
+	sfx_freeze    = SoundGen.generate_freeze()
+	sfx_castle_hit = SoundGen.generate_castle_hit()
+
+func play_sfx(stream: AudioStreamWAV, volume_db: float = 0.0):
+	var player = AudioStreamPlayer.new()
+	player.stream = stream
+	player.volume_db = volume_db
+	add_child(player)
+	player.play()
+	player.finished.connect(player.queue_free)
 
 func create_ui():
 	var ui_layer = CanvasLayer.new()
@@ -169,6 +191,7 @@ func place_tower(pos, tower_type):
 		"obj": obj,
 		"shoot_timer": 0.0,
 		"laser_target": null,
+		"laser_firing": false,  # 雷射是否正在射擊
 	})
 
 func place_wall(pos):
@@ -245,7 +268,7 @@ func spawn_enemy(enemy_type: int):
 		"x": spawn_pos.x,
 		"y": spawn_pos.y,
 		"speed": info["speed"],
-		"base_speed": info["speed"],   # 原始速度，緩速恢復用
+		"base_speed": info["speed"],
 		"reward": info["reward"],
 		"obj": obj,
 		"direction": Vector2.ZERO,
@@ -254,8 +277,8 @@ func spawn_enemy(enemy_type: int):
 		"stuck_timer": 0.0,
 		"last_pos": spawn_pos,
 		"hit_wall_idx": -1,
-		"freeze_timer": 0.0,           # 緩速剩餘時間
-		"is_frozen": false,            # 是否被緩速中
+		"freeze_timer": 0.0,
+		"is_frozen": false,
 	})
 	enemies_spawned += 1
 
@@ -269,18 +292,16 @@ func get_random_edge_position() -> Vector2:
 		3: return Vector2(sw, randf_range(0, sh * 0.8))
 	return Vector2.ZERO
 
-# 對範圍內所有敵人套用緩速
 func apply_freeze(pos: Vector2, radius: float, freeze_time: float, slow_ratio: float):
 	for e in enemies:
 		if not is_instance_valid(e["obj"]):
 			continue
-		var dist = pos.distance_to(Vector2(e["x"], e["y"]))
-		if dist < radius:
+		if pos.distance_to(Vector2(e["x"], e["y"])) < radius:
 			e["freeze_timer"] = freeze_time
 			e["is_frozen"] = true
-			e["speed"] = e["base_speed"] * slow_ratio  # 減速到原來的 30%
+			e["speed"] = e["base_speed"] * slow_ratio
 			if is_instance_valid(e["obj"]):
-				e["obj"].self_modulate = Color.CYAN  # 變成藍色表示被凍結
+				e["obj"].self_modulate = Color.CYAN
 
 func check_wall_collision(enemy_pos: Vector2, _dir: Vector2) -> int:
 	var rect = Rect2(enemy_pos - Vector2(10, 10), Vector2(20, 20))
@@ -300,7 +321,7 @@ func get_turn_directions(dir: Vector2) -> Array:
 	return result
 
 func trigger_castle_damage():
-	play_sound.call_deferred("castle_hit")
+	play_sfx(sfx_castle_hit, -4.0)
 	castle_shake_timer = 0.3
 	castle_shake_intensity = 8.0
 	castle_blink_timer = 0.3
@@ -323,21 +344,18 @@ func _process(delta):
 			shake = Vector2(randf_range(-castle_shake_intensity, castle_shake_intensity), randf_range(-castle_shake_intensity, castle_shake_intensity))
 		castle_sprite.position = castle_pos + shake
 
-	# 更新敵人（包含 freeze 計時器）
+	# 更新敵人
 	for i in range(enemies.size() - 1, -1, -1):
 		var e = enemies[i]
 		if not is_instance_valid(e["obj"]):
 			enemies.remove_at(i)
 			continue
 
-		# 更新緩速計時器
 		if e["is_frozen"]:
 			e["freeze_timer"] -= delta
 			if e["freeze_timer"] <= 0:
-				# 緩速結束，恢復原速
 				e["is_frozen"] = false
 				e["speed"] = e["base_speed"]
-				# 恢復原本顏色
 				match e["type"]:
 					1: e["obj"].self_modulate = Color.YELLOW
 					2: e["obj"].self_modulate = Color.WHITE
@@ -402,6 +420,10 @@ func _process(delta):
 
 	laser_beams.clear()
 
+	# 雷射音效計時器
+	laser_sound_timer -= delta
+	var any_laser_firing = false
+
 	# 更新塔
 	for tower in towers:
 		if not is_instance_valid(tower["obj"]):
@@ -421,18 +443,21 @@ func _process(delta):
 		if tower["type"] == 5:
 			# 雷射塔
 			tower["laser_target"] = target
+			tower["laser_firing"] = (target != null)
 			if target != null:
+				any_laser_firing = true
 				if tower["shoot_timer"] <= 0:
 					target["hp"] -= tower["damage"]
 					tower["shoot_timer"] = tower["shoot_speed"]
 				laser_beams.append({"from": tower["pos"], "to": Vector2(target["x"], target["y"])})
 		else:
-			# 一般塔 + Freeze 塔
+			tower["laser_firing"] = false
 			if tower["shoot_timer"] <= 0 and target:
-				play_sound.call_deferred("shoot")
-				var bullet_color = Color.YELLOW
 				if tower["type"] == 4:
-					bullet_color = Color.CYAN
+					play_sfx(sfx_freeze, -4.0)
+				else:
+					play_sfx(sfx_shoot, -6.0)
+				var bullet_color = Color.CYAN if tower["type"] == 4 else Color.YELLOW
 				var bullet_obj = ColorRect.new()
 				bullet_obj.size = Vector2(10, 10)
 				bullet_obj.color = bullet_color
@@ -445,11 +470,18 @@ func _process(delta):
 					"explosion_range": tower["explosion_range"],
 					"obj": bullet_obj,
 					"lifetime": 5.0,
-					"tower_type": tower["type"],      # 記錄塔的類型
+					"tower_type": tower["type"],
 					"freeze_time": tower_types[tower["type"]].get("freeze_time", 0.0),
 					"slow_ratio": tower_types[tower["type"]].get("slow_ratio", 1.0),
 				})
 				tower["shoot_timer"] = tower["shoot_speed"]
+
+	# 雷射音效：有雷射在射擊時，定期播放
+	if any_laser_firing and laser_sound_timer <= 0:
+		if is_instance_valid(laser_audio):
+			laser_audio.stream = sfx_laser
+			laser_audio.play()
+		laser_sound_timer = LASER_SOUND_INTERVAL
 
 	# 更新子彈
 	for i in range(bullets.size() - 1, -1, -1):
@@ -468,9 +500,7 @@ func _process(delta):
 		b["obj"].position = b["pos"] - Vector2(5, 5)
 		if b["pos"].distance_to(target_pos) < 12:
 			if b["tower_type"] == 4:
-				# Freeze 子彈：套用範圍緩速
 				apply_freeze(b["pos"], b["explosion_range"], b["freeze_time"], b["slow_ratio"])
-				# 範圍冰凍視覺效果
 				explosions.append({"pos": b["pos"], "range": b["explosion_range"], "lifetime": 0.4, "type": "freeze"})
 			else:
 				create_explosion(b["pos"], b["explosion_range"], b["damage"])
@@ -494,7 +524,7 @@ func _process(delta):
 	queue_redraw()
 
 func create_explosion(pos: Vector2, explosion_range: float, damage: int):
-	play_sound.call_deferred("explosion")
+	play_sfx(sfx_explosion, -4.0)
 	explosions.append({"pos": pos, "range": explosion_range, "lifetime": 0.3, "type": "normal"})
 	for i in range(enemies.size() - 1, -1, -1):
 		var e = enemies[i]
@@ -533,7 +563,6 @@ func _draw():
 		var ratio = float(e["hp"]) / float(e["max_hp"])
 		draw_rect(Rect2(ep.x - 16, ep.y - 30, 24 * ratio, 4), Color.GREEN.lerp(Color.RED, 1.0 - ratio))
 		draw_rect(Rect2(ep.x - 16, ep.y - 30, 24, 4), Color.WHITE, false, 1.0)
-		# 緩速時顯示冰晶效果
 		if e["is_frozen"]:
 			draw_arc(ep, 14, 0, TAU, 8, Color(0, 1, 1, 0.6), 2.0)
 
@@ -545,14 +574,13 @@ func _draw():
 		draw_rect(Rect2(wall["pos"].x - 12, wall["pos"].y + 20, 24 * ratio, 2), Color.CYAN.lerp(Color.RED, 1.0 - ratio))
 
 	for exp in explosions:
-		var p = 1.0 - (exp["lifetime"] / (0.4 if exp.get("type", "normal") == "freeze" else 0.3))
+		var max_lifetime = 0.4 if exp.get("type", "normal") == "freeze" else 0.3
+		var p = 1.0 - (exp["lifetime"] / max_lifetime)
 		if exp.get("type", "normal") == "freeze":
-			# 冰凍爆炸：藍色
 			draw_circle(exp["pos"], exp["range"] * (1.0 + p * 0.3), Color(0, 0.8, 1, 0.4 * (1.0 - p)))
 			draw_circle(exp["pos"], exp["range"] * 0.7, Color(0.5, 1, 1, 0.6 * (1.0 - p)))
 			draw_arc(exp["pos"], exp["range"], 0, TAU, 32, Color(0, 1, 1, 0.8 * (1.0 - p)), 2.0)
 		else:
-			# 一般爆炸：橙色
 			draw_circle(exp["pos"], exp["range"] * (1.0 + p * 0.5), Color(1, 1, 0, 0.4 * (1.0 - p)))
 			draw_circle(exp["pos"], exp["range"] * 0.8, Color(1, 0.6, 0, 0.6 * (1.0 - p)))
 			draw_circle(exp["pos"], exp["range"] * 0.4, Color(1, 0.2, 0, 1.0 * (1.0 - p)))
@@ -590,6 +618,7 @@ func reset_game():
 	enemies_spawned = 0
 	castle_shake_timer = 0.0
 	castle_blink_timer = 0.0
+	laser_sound_timer = 0.0
 
 	for i in range(ui_buttons.size()):
 		ui_buttons[i].button_pressed = (i == 0)
